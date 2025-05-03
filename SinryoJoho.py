@@ -1,13 +1,27 @@
 from feedgen.feed import FeedGenerator
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import os
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
+# 和暦「令和」→西暦変換
+def convert_reiwa_date(reiwa_date_str):
+    try:
+        reiwa_date_str = reiwa_date_str.replace("令和", "").replace("年", "-").replace("月", "-").replace("日", "").replace(" ", "")
+        parts = reiwa_date_str.split("-")
+        if len(parts) == 3:
+            year = 2018 + int(parts[0])  # 令和元年は2019年
+            month = int(parts[1])
+            day = int(parts[2])
+            return datetime(year, month, day, tzinfo=timezone(timedelta(hours=9)))  # JST
+    except:
+        pass
+    return datetime.now(timezone.utc)
+
 def generate_rss(items, output_path):
     fg = FeedGenerator()
-    fg.title("診療報酬情報提供サービス｜RSS")
+    fg.title("診療報酬情報提供サービス｜更新履歴")
     fg.link(href="https://shinryohoshu.mhlw.go.jp/shinryohoshu/infoMenu/")
-    fg.description("厚労省の診療報酬関連お知らせ一覧")
+    fg.description("厚生労働省による診療報酬制度に関する最新情報")
     fg.language("ja")
 
     for item in items:
@@ -16,7 +30,7 @@ def generate_rss(items, output_path):
         entry.link(href=item['link'])
         entry.description(item['description'])
         entry.guid(item['link'], permalink=False)
-        entry.pubDate(datetime.now(timezone.utc))
+        entry.pubDate(item['pubDate'])
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     fg.rss_file(output_path)
@@ -48,34 +62,38 @@ with sync_playwright() as p:
     for i in range(count):
         row = rows.nth(i)
         try:
-            # 日付
-            date_text = row.locator("td:nth-child(1)").inner_text().strip()
-            
-            # タイトル & リンク
-            td2 = row.locator("td:nth-child(2)")
-            a_tag = td2.locator("a")
-            if a_tag.count() > 0:
-                title = a_tag.inner_text().strip()
-                link = a_tag.get_attribute("href")
-                if link and not link.startswith("http"):
-                    link = f"https://shinryohoshu.mhlw.go.jp{link}"
-            else:
-                title = td2.inner_text().strip()
-                link = "https://shinryohoshu.mhlw.go.jp/shinryohoshu/infoMenu/"
+            # 日付（1列目）
+            raw_date = row.locator("td:nth-child(1)").inner_text().strip()
+            pub_date = convert_reiwa_date(raw_date)
 
-            description = f"{date_text} - {title}"
+            # 内容（HTML付き）
+            td2_html = row.locator("td:nth-child(2)").inner_html().strip()
+            td2_text = row.locator("td:nth-child(2)").inner_text().strip()
+
+            # 最初の行をタイトルに
+            title = td2_text.split("\n")[0].strip()
+
+            # 1つ目のリンクがあればそれを使用、なければ固定ページ
+            first_link = row.locator("td:nth-child(2) a").first
+            if first_link.count() > 0:
+                link = first_link.get_attribute("href")
+                if link and not link.startswith("http"):
+                    link = "https://shinryohoshu.mhlw.go.jp" + link
+            else:
+                link = "https://shinryohoshu.mhlw.go.jp/shinryohoshu/infoMenu/"
 
             items.append({
                 "title": title,
                 "link": link,
-                "description": description
+                "description": td2_html,
+                "pubDate": pub_date
             })
         except Exception as e:
-            print(f"⚠ 行{i}の処理でエラー: {e}")
+            print(f"⚠ 行{i}でエラー: {e}")
             continue
 
     if not items:
-        print("⚠ 情報が抽出できませんでした。HTML構造が変わった可能性があります。")
+        print("⚠ 抽出されたデータが空です。")
 
     rss_path = "rss_output/shinryohoshu.xml"
     generate_rss(items, rss_path)
