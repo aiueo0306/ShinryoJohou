@@ -5,9 +5,9 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 
 def generate_rss(items, output_path):
     fg = FeedGenerator()
-    fg.title("診療報酬情報提供サービス｜更新情報")
+    fg.title("診療報酬情報提供サービス｜RSS")
     fg.link(href="https://shinryohoshu.mhlw.go.jp/shinryohoshu/infoMenu/")
-    fg.description("厚労省 診療報酬情報提供サービスの更新履歴")
+    fg.description("厚労省の診療報酬関連お知らせ一覧")
     fg.language("ja")
 
     for item in items:
@@ -39,38 +39,45 @@ with sync_playwright() as p:
         exit()
 
     print("▶ 情報を抽出しています...")
-    rows = page.locator("body > table > tr > td > div > table > tr")
-    items = []
-
+    rows = page.locator("table tr")
     count = rows.count()
     print(f"📦 発見した行数: {count}")
+
+    items = []
 
     for i in range(count):
         row = rows.nth(i)
         try:
-            # td[2]/child::node() での説明取得
-            description = row.locator("td:nth-child(2)").inner_html().strip()
-
-            # タイトルとリンクの抽出（aタグがあれば）
-            link_el = row.locator("td:nth-child(2) a")
-            if link_el.count() > 0:
-                title = link_el.inner_text().strip()
-                link = link_el.get_attribute("href")
+            # 日付
+            date_text = row.locator("td:nth-child(1)").inner_text().strip()
+            
+            # タイトル & リンク
+            td2 = row.locator("td:nth-child(2)")
+            a_tag = td2.locator("a")
+            if a_tag.count() > 0:
+                title = a_tag.inner_text().strip()
+                link = a_tag.get_attribute("href")
                 if link and not link.startswith("http"):
                     link = f"https://shinryohoshu.mhlw.go.jp{link}"
             else:
-                title = description[:30]  # タイトルがなければ先頭数文字
-                link = "https://shinryohoshu.mhlw.go.jp/shinryohoshu/infoMenu/"  # ベースURL
+                title = td2.inner_text().strip()
+                link = "https://shinryohoshu.mhlw.go.jp/shinryohoshu/infoMenu/"
 
-            items.append({"title": title, "link": link, "description": description})
+            description = f"{date_text} - {title}"
+
+            items.append({
+                "title": title,
+                "link": link,
+                "description": description
+            })
         except Exception as e:
-            print(f"⚠ 行 {i} の抽出中にエラー: {e}")
+            print(f"⚠ 行{i}の処理でエラー: {e}")
             continue
 
     if not items:
-        print("⚠ 抽出できた情報がありません。HTML構造変更の可能性があります。")
+        print("⚠ 情報が抽出できませんでした。HTML構造が変わった可能性があります。")
 
-    rss_path = f"rss_output/shinryohoshu.xml"
+    rss_path = "rss_output/shinryohoshu.xml"
     generate_rss(items, rss_path)
 
     print(f"\n✅ RSSフィード生成完了！\n📄 保存先: {rss_path}")
