@@ -2,8 +2,8 @@ name: Update RSS feed every hour
 
 on:
   schedule:
-    - cron: '0 * * * *'  # 毎時0分に実行（UTC時間）
-  workflow_dispatch:      # 手動実行も可
+    - cron: '0 * * * *'  # 毎時0分に実行（UTC）
+  workflow_dispatch:      # 手動でも実行可能
 
 jobs:
   build:
@@ -26,8 +26,8 @@ jobs:
           pip install feedgen playwright
           playwright install chromium
 
-      - name: Run RSS generator
-        run: python rss_playwright_auto.py
+      - name: Run SinryoJoho RSS generator
+        run: python SinryoJoho.py  # ← ここを変更
 
       - name: Commit and push changes
         run: |
