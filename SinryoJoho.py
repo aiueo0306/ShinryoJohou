@@ -39,7 +39,7 @@ with sync_playwright() as p:
         exit()
 
     print("▶ 情報を抽出しています...")
-    rows = page.locator("/html/body/table/tr/td/div/table/tr")
+    rows = page.locator("body > table > tr > td > div > table > tr")
     items = []
 
     count = rows.count()
