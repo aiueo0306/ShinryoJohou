@@ -110,6 +110,6 @@ with sync_playwright() as p:
     if not items:
         print("⚠ 抽出できた更新情報がありません。HTML構造が変わっている可能性があります。")
 
-    rss_path = "rss_output/mhlw_shinryohoshu.xml"
+    rss_path = "rss_output/shinryohoshu.xml"
     generate_rss(items, rss_path)
     browser.close()
