@@ -41,45 +41,46 @@ with sync_playwright() as p:
 
     print("▶ 更新情報を抽出しています...")
     items = []
-    main2_blocks = page.locator("div.main2")
 
-    for j in range(main2_blocks.count()):
-        try:
-            block = main2_blocks.nth(j)
-            table_rows = block.locator("table tr")
-            row_count = table_rows.count()
-            print(f"▶ .main2[{j}] 内の行数: {row_count}")
+    # 明示的に「掲載情報の更新について」セクションのtableをターゲットにする
+    try:
+        table = page.locator("text=掲載情報の更新について").locator("xpath=..").locator("xpath=..").locator("table").first
+        rows = table.locator("tr")
+        count = rows.count()
+        print(f"📦 発見した更新情報行数: {count}")
 
-            for i in range(row_count):
-                row = table_rows.nth(i)
-                tds = row.locator("td")
-                if tds.count() < 2:
-                    continue
+        for i in range(count):
+            row = rows.nth(i)
+            cols = row.locator("td")
+            if cols.count() < 2:
+                continue
 
-                date_text = tds.nth(0).inner_text().strip()
-                desc_html = tds.nth(1).inner_html().strip()
-                link_elem = tds.nth(1).locator("a")
+            date_text = cols.nth(0).inner_text().strip()
+            desc_html = cols.nth(1).inner_html().strip()
+            desc_text = cols.nth(1).inner_text().strip()
 
-                link = "https://www.mhlw.go.jp/shinryohoshu/"
-                if link_elem.count() > 0:
-                    raw_link = link_elem.first.get_attribute("href")
-                    if raw_link:
-                        link = raw_link if raw_link.startswith("http") else f"https://www.mhlw.go.jp{raw_link}"
+            link = "https://www.mhlw.go.jp/shinryohoshu/"
+            link_elem = cols.nth(1).locator("a")
+            if link_elem.count() > 0:
+                raw_link = link_elem.first.get_attribute("href")
+                if raw_link:
+                    if raw_link.startswith("http"):
+                        link = raw_link
+                    else:
+                        link = f"https://www.mhlw.go.jp{raw_link}"
 
-                title = desc_html.split("<br>")[0].strip()
-                items.append({
-                    "title": f"{date_text}｜{title}",
-                    "link": link,
-                    "description": desc_html
-                })
-        except Exception as e:
-            print(f"⚠ main2[{j}] 処理中にエラー: {e}")
-            continue
+            title = desc_text.splitlines()[0].strip() if desc_text else "診療報酬改定関連のお知らせ"
+            items.append({
+                "title": f"{date_text}｜{title}",
+                "link": link,
+                "description": desc_html
+            })
 
-    print(f"📦 発見した更新情報行数: {len(items)}")
+    except Exception as e:
+        print(f"⚠ 更新情報の抽出に失敗しました: {e}")
 
     if not items:
-        print("⚠ 抽出できた情報がありません。HTML構造の変更の可能性があります。")
+        print("⚠ 抽出できた情報がありません。HTML構造が変更された可能性があります。")
 
     rss_path = "rss_output/mhlw_shinryohoshu.xml"
     generate_rss(items, rss_path)
