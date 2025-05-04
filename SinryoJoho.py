@@ -39,7 +39,7 @@ with sync_playwright() as p:
     print("▶ 更新情報を抽出しています...")
 
     # 2つ目の .main2 内の table tr を取得
-    rows = page.locator("div.main2:nth-of-type(3) table tr")
+    rows = page.locator("//div[@class='main2'][2]//table//tr")
     count = rows.count()
     print(f"📦 発見した更新情報行数: {count}")
 
