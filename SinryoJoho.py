@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from urllib.parse import urljoin
 import os
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+import re
 
 BASE_URL = "https://shinryohoshu.mhlw.go.jp/shinryohoshu/"
 DEFAULT_LINK = "https://shinryohoshu.mhlw.go.jp/shinryohoshu/infoMenu/"
@@ -22,8 +23,12 @@ def generate_rss(items, output_path):
         entry.title(item['title'])
         entry.link(href=item['link'])
         entry.description(item['description'])
-        entry.guid(item['link'], permalink=True)  # <== GUIDはリンクと同一でtrue
-        entry.pubDate(item['pub_date'])           # <== 適切な日付（パース済）
+
+        # GUIDはユニークにする（リンク＋日付で）
+        guid_value = f"{item['link']}#{item['pub_date'].strftime('%Y%m%d')}"
+        entry.guid(guid_value, permalink=False)
+
+        entry.pubDate(item['pub_date'])
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     fg.rss_file(output_path)
@@ -51,19 +56,19 @@ def extract_items(page):
             else:
                 first_link = DEFAULT_LINK
 
-            # description内の相対パスも絶対パスに変換
+            # description内の相対パスを絶対パスに変換
             content_html = content_html.replace('href="/', f'href="{BASE_URL}')
 
-            # pubDate（RFC 2822形式）を適当に日付として整形（令和→西暦変換は略）
             try:
                 pub_date = parse_date_text(date_text)
-            except:
+            except Exception as e:
+                print(f"⚠ 日付の変換に失敗: {e}")
                 pub_date = datetime.now(timezone.utc)
 
             items.append({
                 "title": f"更新情報: {date_text}",
                 "link": first_link,
-                "description": f"<![CDATA[{content_html}]]>",
+                "description": content_html,  # CDATA不要
                 "pub_date": pub_date
             })
 
@@ -74,8 +79,6 @@ def extract_items(page):
     return items
 
 def parse_date_text(text):
-    # 例: "令和 7年 1月15日" → datetime
-    import re
     text = text.replace("　", " ").replace("\u3000", " ")
     match = re.search(r"令和\s*(\d)年\s*(\d{1,2})月\s*(\d{1,2})日?", text)
     if match:
