@@ -39,7 +39,7 @@ with sync_playwright() as p:
 
     print("▶ 更新情報を抽出しています...")
 
-    selector = "body > table > tbody > tr > td:nth-child(1) > div:nth-child(5) > p:nth-child(2) > table > tr"
+    selector = "body > table > tbody > tr > td:nth-child(1) > div:nth-child(5) > p:nth-child(2) > table > tbody > tr"
     rows = page.locator(selector)
     count = rows.count()
     print(f"📦 発見した更新情報行数: {count}")
