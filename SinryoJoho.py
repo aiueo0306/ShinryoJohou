@@ -6,7 +6,7 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 def generate_rss(items, output_path):
     fg = FeedGenerator()
     fg.title("MHLW｜診療報酬改定関連 更新情報")
-    fg.link(href="https://www.mhlw.go.jp/shinryohoshu/")
+    fg.link(href="https://shinryohoshu.mhlw.go.jp/shinryohoshu/infoMenu/")
     fg.description("厚生労働省保険局『診療報酬改定関連』ページの更新履歴")
     fg.language("ja")
 
