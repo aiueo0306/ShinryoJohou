@@ -52,7 +52,7 @@ with sync_playwright() as p:
             content_html = row.locator("td:nth-child(2)").inner_html().strip()
 
             # 明示的にリンクを取得
-            a_tag = row.locator("td:nth-child(2) > a").first
+            a_tag = row.locator("td:nth-child(2) > a:nth-child(3)").first
             href = a_tag.get_attribute("href") if a_tag else None
 
             if href and href.startswith("/"):
