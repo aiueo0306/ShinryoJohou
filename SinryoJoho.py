@@ -32,13 +32,16 @@ with sync_playwright() as p:
     page.goto("https://www.mhlw.go.jp/shinryohoshu/", timeout=60000)
     page.wait_for_load_state("load", timeout=10000)
 
+    print("▶ HTMLを保存中（デバッグ用）...")
+    with open("debug.html", "w", encoding="utf-8") as f:
+        f.write(page.content())
+
     print("▶ 更新情報を抽出しています...")
     items = []
 
-    # 直接セレクタで更新表の行を取得
-    rows = page.locator("body > table > tbody > tr > td:nth-child(1) > div:nth-child(5) > p:nth-child(2) > table > tbody > tr")
+    # XPathで最初のmain2ブロック内の最初のtableを取得
+    rows = page.locator('//div[@class="main2"][1]//table[1]//tr')
     count = rows.count()
-
     print(f"📦 発見した更新情報行数: {count}")
 
     for i in range(count):
@@ -51,7 +54,7 @@ with sync_playwright() as p:
         description = tds.nth(1).inner_text().strip()
         raw_html = tds.nth(1).inner_html().strip()
 
-        # 最初のリンクを取得（なければトップページにする）
+        # 最初のリンクを取得（なければトップページ）
         link_elem = tds.nth(1).locator("a")
         link = "https://www.mhlw.go.jp/shinryohoshu/"
         if link_elem.count() > 0:
@@ -71,5 +74,4 @@ with sync_playwright() as p:
     output_path = "rss_output/mhlw_shinryohoshu.xml"
     generate_rss(items, output_path)
     print(f"✅ RSSフィード生成完了！保存先: {output_path}")
-
     browser.close()
