@@ -1,6 +1,5 @@
 from feedgen.feed import FeedGenerator
 from datetime import datetime, timezone
-from dateutil.parser import parse as date_parse
 import os
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
@@ -16,8 +15,8 @@ def generate_rss(items, output_path):
         entry.title(item['title'])
         entry.link(href=item['link'])
         entry.description(item['description'])
-        entry.guid(item['link'] + "#" + item['title'], permalink=False)
-        entry.pubDate(item['pubDate'])
+        entry.guid(item['link'], permalink=False)
+        entry.pubDate(datetime.now(timezone.utc))
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     fg.rss_file(output_path)
@@ -49,23 +48,24 @@ with sync_playwright() as p:
     for i in range(count):
         row = rows.nth(i)
         try:
-            date_text = row.locator("td:nth-child(1)").inner_text().strip()
+            date = row.locator("td:nth-child(1)").inner_text().strip()
             content_html = row.locator("td:nth-child(2)").inner_html().strip()
 
-            a_tag = row.locator("td:nth-child(2) a").first
-            relative_href = a_tag.get_attribute("href")
-            if relative_href and relative_href.startswith("/"):
-                full_link = "https://shinryohoshu.mhlw.go.jp" + relative_href
+            # 明示的にリンクを取得
+            a_tag = row.locator("td:nth-child(2) > a").first
+            href = a_tag.get_attribute("href") if a_tag else None
+
+            if href and href.startswith("/"):
+                full_link = "https://shinryohoshu.mhlw.go.jp" + href
+            elif href:
+                full_link = href
             else:
                 full_link = "https://www.mhlw.go.jp/shinryohoshu/"
 
-            pub_date = date_parse(date_text, fuzzy=True, dayfirst=True).astimezone(timezone.utc)
-
             items.append({
-                "title": f"更新情報: {date_text}",
+                "title": f"更新情報: {date}",
                 "link": full_link,
-                "description": content_html,
-                "pubDate": pub_date
+                "description": content_html
             })
         except Exception as e:
             print(f"⚠ 行{i+1}の解析に失敗: {e}")
