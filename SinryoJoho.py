@@ -1,7 +1,17 @@
 from feedgen.feed import FeedGenerator
 from datetime import datetime, timezone
 import os
+import re
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+
+def convert_japanese_date(jp_date):
+    match = re.match(r"令和\s*(\d+)年\s*(\d+)月\s*(\d+)日", jp_date)
+    if not match:
+        return datetime.now(timezone.utc)
+    year = 2018 + int(match.group(1))  # 令和元年＝2019年
+    month = int(match.group(2))
+    day = int(match.group(3))
+    return datetime(year, month, day, tzinfo=timezone.utc)
 
 def generate_rss(items, output_path):
     fg = FeedGenerator()
@@ -14,9 +24,9 @@ def generate_rss(items, output_path):
         entry = fg.add_entry()
         entry.title(item['title'])
         entry.link(href=item['link'])
-        entry.description(item['description'])
+        entry.description(f"<![CDATA[{item['description']}]]>")
         entry.guid(item['link'], permalink=False)
-        entry.pubDate(datetime.now(timezone.utc))
+        entry.pubDate(item['pubDate'])
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     fg.rss_file(output_path)
@@ -37,37 +47,35 @@ with sync_playwright() as p:
         exit()
 
     print("▶ 更新情報を抽出しています...")
-
     selector = "body > table > tbody > tr > td:nth-child(1) > div:nth-child(5) > p:nth-child(2) > table > tbody > tr"
     rows = page.locator(selector)
     count = rows.count()
     print(f"📦 発見した更新情報行数: {count}")
 
     items = []
+
     for i in range(count):
         row = rows.nth(i)
         try:
-            date = row.locator("td:nth-child(1)").inner_text(timeout=2000).strip()
-            td2 = row.locator("td:nth-child(2)")
-            content_html = td2.inner_html(timeout=2000).strip()
+            date_text = row.locator("td:nth-child(1)").inner_text(timeout=3000).strip()
+            html_content = row.locator("td:nth-child(2)").inner_html(timeout=3000).strip()
 
-            # aタグが存在すれば1番目を取得、なければデフォルト
-            link_element = td2.locator("a").first
-            if link_element.count():
-                href = link_element.get_attribute("href") or ""
-                if href.startswith("/"):
-                    link = "https://shinryohoshu.mhlw.go.jp" + href
-                elif href.startswith("http"):
-                    link = href
-                else:
-                    link = "https://shinryohoshu.mhlw.go.jp/shinryohoshu/infoMenu/"
-            else:
-                link = "https://shinryohoshu.mhlw.go.jp/shinryohoshu/infoMenu/"
+            # 複数のリンクのうちPDFを優先
+            link_elements = row.locator("td:nth-child(2) a")
+            link_count = link_elements.count()
+            file_link = "https://shinryohoshu.mhlw.go.jp/shinryohoshu/infoMenu/"  # fallback
+
+            for j in range(link_count):
+                href = link_elements.nth(j).get_attribute("href")
+                if href and href.endswith(".pdf"):
+                    file_link = "https://shinryohoshu.mhlw.go.jp" + href
+                    break
 
             items.append({
-                "title": f"更新情報: {date}",
-                "link": link,
-                "description": content_html
+                "title": f"更新情報: {date_text}",
+                "link": file_link,
+                "description": html_content,
+                "pubDate": convert_japanese_date(date_text)
             })
 
         except Exception as e:
