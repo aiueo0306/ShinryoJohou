@@ -44,29 +44,32 @@ with sync_playwright() as p:
     print(f"📦 発見した更新情報行数: {count}")
 
     items = []
-
     for i in range(count):
         row = rows.nth(i)
         try:
-            date = row.locator("td:nth-child(1)").inner_text().strip()
-            content_html = row.locator("td:nth-child(2)").inner_html().strip()
+            date = row.locator("td:nth-child(1)").inner_text(timeout=2000).strip()
+            td2 = row.locator("td:nth-child(2)")
+            content_html = td2.inner_html(timeout=2000).strip()
 
-            # 明示的にリンクを取得
-            a_tag = row.locator("td:nth-child(2) > a:nth-child(3)").first
-            href = a_tag.get_attribute("href") if a_tag else None
-
-            if href and href.startswith("/"):
-                full_link = "https://shinryohoshu.mhlw.go.jp" + href
-            elif href:
-                full_link = href
+            # aタグが存在すれば1番目を取得、なければデフォルト
+            link_element = td2.locator("a").first
+            if link_element.count():
+                href = link_element.get_attribute("href") or ""
+                if href.startswith("/"):
+                    link = "https://shinryohoshu.mhlw.go.jp" + href
+                elif href.startswith("http"):
+                    link = href
+                else:
+                    link = "https://shinryohoshu.mhlw.go.jp/shinryohoshu/infoMenu/"
             else:
-                full_link = "https://www.mhlw.go.jp/shinryohoshu/"
+                link = "https://shinryohoshu.mhlw.go.jp/shinryohoshu/infoMenu/"
 
             items.append({
                 "title": f"更新情報: {date}",
-                "link": full_link,
+                "link": link,
                 "description": content_html
             })
+
         except Exception as e:
             print(f"⚠ 行{i+1}の解析に失敗: {e}")
             continue
