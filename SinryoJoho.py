@@ -36,12 +36,6 @@ with sync_playwright() as p:
         browser.close()
         exit()
 
-    # 必要に応じてdebug用HTMLを保存
-    debug_path = os.path.expanduser("~/Desktop/debug_mhlw_shinryohoshu.html")
-    with open(debug_path, "w", encoding="utf-8") as f:
-        f.write(page.content())
-    print(f"💾 デバッグHTML保存済: {debug_path}")
-
     print("▶ 更新情報を抽出しています...")
 
     # 該当するテーブル行を抽出
