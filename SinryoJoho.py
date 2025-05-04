@@ -36,39 +36,43 @@ with sync_playwright() as p:
         browser.close()
         exit()
 
+    # 必要に応じてdebug用HTMLを保存
+    debug_path = os.path.expanduser("~/Desktop/debug_mhlw_shinryohoshu.html")
+    with open(debug_path, "w", encoding="utf-8") as f:
+        f.write(page.content())
+    print(f"💾 デバッグHTML保存済: {debug_path}")
+
     print("▶ 更新情報を抽出しています...")
 
-    items = []
-    rows = page.locator("div.main2 + div.main2 table tr")  # 2つ目の main2 内の表の行
+    # 該当するテーブル行を抽出
+    selector = "body > table > tbody > tr > td:nth-child(1) > div:nth-child(5) > p:nth-child(2) > table > tbody > tr"
+    rows = page.locator(selector)
     count = rows.count()
     print(f"📦 発見した更新情報行数: {count}")
 
-    for i in range(count):
-        try:
-            row = rows.nth(i)
-            date_text = row.locator("td").nth(0).inner_text().strip()
-            content_td = row.locator("td").nth(1)
+    items = []
 
-            content_text = content_td.inner_text().strip()
-            link_tag = content_td.locator("a").first
-            link = link_tag.get_attribute("href") if link_tag.count() > 0 else None
-            if link and not link.startswith("http"):
-                link = "https://www.mhlw.go.jp" + link
+    for i in range(count):
+        row = rows.nth(i)
+        try:
+            date = row.locator("td:nth-child(1)").inner_text().strip()
+            content_html = row.locator("td:nth-child(2)").inner_html().strip()
+            link = "https://www.mhlw.go.jp/shinryohoshu/"
 
             items.append({
-                "title": f"{date_text}：{content_text[:30]}…",
-                "link": link or "https://www.mhlw.go.jp/shinryohoshu/",
-                "description": content_text
+                "title": f"更新情報: {date}",
+                "link": link,
+                "description": content_html
             })
         except Exception as e:
-            print(f"⚠ エラー: {e}")
+            print(f"⚠ 行{i+1}の解析に失敗: {e}")
             continue
 
     if not items:
-        print("⚠ 抽出できた更新情報がありません。HTML構造が変更された可能性があります。")
+        print("⚠ 抽出できた更新情報がありません。HTML構造が変わっている可能性があります。")
 
-    rss_path = f"rss_output/mhlw_shinryohoshu.xml"
+    rss_path = "rss_output/mhlw_shinryohoshu.xml"
     generate_rss(items, rss_path)
 
-    print(f"\n✅ RSSフィード生成完了！\n📄 保存先: {rss_path}")
+    print(f"\n✅ RSSフィード生成完了！📄 保存先: {rss_path}")
     browser.close()
