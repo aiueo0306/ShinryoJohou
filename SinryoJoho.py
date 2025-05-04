@@ -29,47 +29,41 @@ with sync_playwright() as p:
     page = context.new_page()
 
     print("▶ ページにアクセス中...")
-    page.goto("https://www.mhlw.go.jp/shinryohoshu/")
-    page.wait_for_load_state("load")
+    page.goto("https://www.mhlw.go.jp/shinryohoshu/", timeout=60000)
+    page.wait_for_load_state("load", timeout=10000)
 
     print("▶ 更新情報を抽出しています...")
     items = []
 
-    # 「掲載情報の更新について」のh2要素を探す
-    all_main2_divs = page.locator("div.main2")
-    for i in range(all_main2_divs.count()):
-        div = all_main2_divs.nth(i)
-        header_text = div.locator("h2").inner_text().strip()
-        if "掲載情報の更新" in header_text:
-            table = div.locator("table").first
-            rows = table.locator("tr")
-            row_count = rows.count()
-            print(f"📦 発見した更新情報行数: {row_count}")
+    # 直接セレクタで更新表の行を取得
+    rows = page.locator("body > table > tbody > tr > td:nth-child(1) > div:nth-child(5) > p:nth-child(2) > table > tbody > tr")
+    count = rows.count()
 
-            for j in range(row_count):
-                row = rows.nth(j)
-                tds = row.locator("td")
-                if tds.count() < 2:
-                    continue
+    print(f"📦 発見した更新情報行数: {count}")
 
-                date = tds.nth(0).inner_text().strip()
-                description = tds.nth(1).inner_text().strip()
-                raw_html = tds.nth(1).inner_html().strip()
+    for i in range(count):
+        row = rows.nth(i)
+        tds = row.locator("td")
+        if tds.count() < 2:
+            continue
 
-                # 最初のリンクを使う
-                link = "https://www.mhlw.go.jp/shinryohoshu/"
-                link_elem = tds.nth(1).locator("a")
-                if link_elem.count() > 0:
-                    href = link_elem.first.get_attribute("href")
-                    if href:
-                        link = href if href.startswith("http") else f"https://www.mhlw.go.jp{href}"
+        date = tds.nth(0).inner_text().strip()
+        description = tds.nth(1).inner_text().strip()
+        raw_html = tds.nth(1).inner_html().strip()
 
-                items.append({
-                    "title": f"{date}｜{description.splitlines()[0]}",
-                    "link": link,
-                    "description": raw_html
-                })
-            break  # 対象の<div class="main2">が見つかればループ終了
+        # 最初のリンクを取得（なければトップページにする）
+        link_elem = tds.nth(1).locator("a")
+        link = "https://www.mhlw.go.jp/shinryohoshu/"
+        if link_elem.count() > 0:
+            href = link_elem.first.get_attribute("href")
+            if href:
+                link = href if href.startswith("http") else f"https://www.mhlw.go.jp{href}"
+
+        items.append({
+            "title": f"{date}｜{description.splitlines()[0]}",
+            "link": link,
+            "description": raw_html
+        })
 
     if not items:
         print("⚠ 抽出できた更新情報がありません。HTML構造が変更された可能性があります。")
