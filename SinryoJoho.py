@@ -3,7 +3,6 @@ from datetime import datetime, timezone
 import os
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
-# RSS生成関数
 def generate_rss(items, output_path):
     fg = FeedGenerator()
     fg.title("MHLW｜診療報酬改定関連 更新情報")
@@ -18,13 +17,11 @@ def generate_rss(items, output_path):
         entry.link(href=item['link'])
         entry.description(item['description'])
         entry.guid(item['link'], permalink=False)
-        entry.pubDate(datetime.now(timezone.utc))  # 日時は現時点のタイムスタンプを使用
+        entry.pubDate(datetime.now(timezone.utc))
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    fg.rss_file(output_path, pretty=True)
-    print(f"✅ RSSフィード生成完了！保存先: {output_path}")
+    fg.rss_file(output_path)
 
-# メイン処理
 with sync_playwright() as p:
     print("▶ ブラウザを起動中...")
     browser = p.chromium.launch(headless=True)
@@ -42,45 +39,50 @@ with sync_playwright() as p:
         browser.close()
         exit()
 
-    print("▶ 情報を抽出中...")
+    print("▶ 更新情報を抽出しています...")
     items = []
-    rows = page.locator("div.main2 table tr")
-    count = rows.count()
-    print(f"📦 発見した更新情報行数: {count}")
+    main2_blocks = page.locator("div.main2")
 
-    for i in range(count):
+    for j in range(main2_blocks.count()):
         try:
-            row = rows.nth(i)
-            tds = row.locator("td")
-            if tds.count() < 2:
-                continue
+            block = main2_blocks.nth(j)
+            table_rows = block.locator("table tr")
+            row_count = table_rows.count()
+            print(f"▶ .main2[{j}] 内の行数: {row_count}")
 
-            date_text = tds.nth(0).inner_text().strip()
-            desc_html = tds.nth(1).inner_html().strip()
-            link_elem = tds.nth(1).locator("a")
+            for i in range(row_count):
+                row = table_rows.nth(i)
+                tds = row.locator("td")
+                if tds.count() < 2:
+                    continue
 
-            link = "https://www.mhlw.go.jp/shinryohoshu/"
-            if link_elem.count() > 0:
-                raw_link = link_elem.first.get_attribute("href")
-                if raw_link:
-                    link = raw_link if raw_link.startswith("http") else f"https://www.mhlw.go.jp{raw_link}"
+                date_text = tds.nth(0).inner_text().strip()
+                desc_html = tds.nth(1).inner_html().strip()
+                link_elem = tds.nth(1).locator("a")
 
-            title = desc_html.split("<br>")[0].strip()
-            items.append({
-                "title": title,
-                "link": link,
-                "description": desc_html
-            })
+                link = "https://www.mhlw.go.jp/shinryohoshu/"
+                if link_elem.count() > 0:
+                    raw_link = link_elem.first.get_attribute("href")
+                    if raw_link:
+                        link = raw_link if raw_link.startswith("http") else f"https://www.mhlw.go.jp{raw_link}"
 
+                title = desc_html.split("<br>")[0].strip()
+                items.append({
+                    "title": f"{date_text}｜{title}",
+                    "link": link,
+                    "description": desc_html
+                })
         except Exception as e:
-            print(f"⚠ 行 {i} の処理中にエラー: {e}")
+            print(f"⚠ main2[{j}] 処理中にエラー: {e}")
             continue
 
-    if not items:
-        print("⚠ 更新情報が抽出できませんでした。構造変更の可能性があります。")
+    print(f"📦 発見した更新情報行数: {len(items)}")
 
-    # RSS出力
-    rss_output_path = "rss_output/mhlw_shinryohoshu.xml"
-    generate_rss(items, rss_output_path)
+    if not items:
+        print("⚠ 抽出できた情報がありません。HTML構造の変更の可能性があります。")
+
+    rss_path = "rss_output/mhlw_shinryohoshu.xml"
+    generate_rss(items, rss_path)
+    print(f"\n✅ RSSフィード生成完了！\n📄 保存先: {rss_path}")
 
     browser.close()
