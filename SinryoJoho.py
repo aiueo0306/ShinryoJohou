@@ -1,4 +1,4 @@
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 from feedgen.feed import FeedGenerator
 from datetime import datetime, timezone
 import os
@@ -27,47 +27,52 @@ with sync_playwright() as p:
     context = browser.new_context()
     page = context.new_page()
 
-    print("▶ ページにアクセス中...")
-    url = "https://www.mhlw.go.jp/shinryohoshu/"
-    page.goto(url, timeout=30000)
-    page.wait_for_load_state("load", timeout=30000)
+    try:
+        print("▶ ページにアクセス中...")
+        page.goto("https://www.mhlw.go.jp/shinryohoshu/", timeout=30000)
+        page.wait_for_load_state("load", timeout=30000)
+    except PlaywrightTimeoutError:
+        print("⚠ ページの読み込みに失敗しました。")
+        browser.close()
+        exit()
 
-    print("▶ HTMLから更新情報を抽出しています...")
+    print("▶ 更新情報を抽出しています...")
 
-    # すべての更新行を含む行を取得（div.main2 > table）
-    rows = page.locator("div.main2 table tr")
-    row_count = rows.count()
-    print(f"📦 発見した更新情報行数: {row_count}")
+    # 掲載情報の更新について -> div.main2の2つ目
+    try:
+        rows = page.locator("div.main2:nth-of-type(2) table tr")
+        count = rows.count()
+        print(f"📦 発見した更新情報行数: {count}")
+        items = []
 
-    items = []
-    for i in range(row_count):
-        try:
+        for i in range(count):
             row = rows.nth(i)
             date = row.locator("td").nth(0).inner_text().strip()
-            description = row.locator("td").nth(1).inner_text().strip()
+            content_td = row.locator("td").nth(1)
+            content_html = content_td.inner_html().strip()
+            link_el = content_td.locator("a")
+            link = link_el.first.get_attribute("href") if link_el.count() > 0 else "#"
 
-            # 埋め込まれている最初のリンクを取得（ある場合）
-            try:
-                link = row.locator("td").nth(1).locator("a").first.get_attribute("href")
-                if link and not link.startswith("http"):
-                    link = "https://www.mhlw.go.jp" + link
-            except:
-                link = url  # fallback
+            # 絶対パスに変換
+            if link and not link.startswith("http"):
+                link = f"https://www.mhlw.go.jp{link}"
 
+            # タイトルに日付を含める（RSS上で重複しないように）
+            title = f"{date} 更新情報"
             items.append({
-                "title": f"{date} 更新情報",
+                "title": title,
                 "link": link,
-                "description": description
+                "description": content_html
             })
-        except Exception as e:
-            print(f"⚠ エラーが発生しました: {e}")
-            continue
+
+    except Exception as e:
+        print(f"⚠ エラー発生: {e}")
+        items = []
 
     if not items:
         print("⚠ 抽出できた更新情報がありません。HTML構造が変更された可能性があります。")
 
     rss_path = "rss_output/mhlw_shinryohoshu.xml"
     generate_rss(items, rss_path)
-    print(f"✅ RSSフィード生成完了！保存先: {os.path.abspath(rss_path)}")
-
+    print(f"✅ RSSフィード生成完了！保存先: {rss_path}")
     browser.close()
